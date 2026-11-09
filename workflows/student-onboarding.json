@@ -1,0 +1,157 @@
+{
+  "name": "Student Onboarding Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "student-onboard",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger-node-id",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  // Generate temporary password\n  const cleanName = item.json.firstName.replace(/[^a-zA-Z]/g, '');\n  item.json.tempPassword = `${cleanName}2026!`;\n  \n  // Generate primary Google Workspace email prefix\n  const emailPrefix = `${item.json.firstName.toLowerCase().replace(/[^a-z]/g, '')}.${item.json.lastName.toLowerCase().replace(/[^a-z]/g, '')}`;\n  item.json.primaryEmail = `${emailPrefix}@sovereignhousegh.org`;\n}\nreturn $input.all();"
+      },
+      "id": "code-node-id",
+      "name": "Generate Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "user",
+        "email": "={{ $json.primaryEmail }}",
+        "nameFamily": "={{ $json.lastName }}",
+        "nameGiven": "={{ $json.firstName }}",
+        "password": "={{ $json.tempPassword }}",
+        "options": {
+          "changePasswordAtNextLogin": true
+        }
+      },
+      "id": "google-admin-node-id",
+      "name": "Google Admin",
+      "type": "n8n-nodes-base.googleAdmin",
+      "typeVersion": 1,
+      "position": [
+        690,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://classroom.googleapis.com/v1/courses/{{ $json.courseId }}/students",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"userId\": \"{{ $json.primaryEmail }}\"}",
+        "options": {}
+      },
+      "id": "http-request-node-id",
+      "name": "Enroll in Classroom",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        910,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.personalEmail }}",
+        "subject": "Welcome to Sovereign House GH!",
+        "message": "=Hello {{ $json.firstName }},\n\nCongratulations on your acceptance to Sovereign House GH!\n\nYour student Google account has been successfully created:\n- Email: {{ $json.primaryEmail }}\n- Temporary Password: {{ $json.tempPassword }}\n\nYou have also been enrolled in your Google Classroom. Please log in at https://classroom.google.com using these details.\n\nBest regards,\nSovereign House GH Team",
+        "options": {}
+      },
+      "id": "gmail-node-id",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1150,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "from": "whatsapp:+14155238886",
+        "to": "=whatsapp:{{ $json.phoneNumber }}",
+        "message": "=Hello {{ $json.firstName }}, welcome to Sovereign House GH! Your student account is ready: {{ $json.primaryEmail }} (Temp Pass: {{ $json.tempPassword }}). Please check your email for access instructions and classroom details."
+      },
+      "id": "twilio-node-id",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Password": {
+      "main": [
+        [
+          {
+            "node": "Google Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Admin": {
+      "main": [
+        [
+          {
+            "node": "Enroll in Classroom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enroll in Classroom": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
